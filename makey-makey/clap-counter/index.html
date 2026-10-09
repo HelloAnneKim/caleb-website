@@ -89,6 +89,18 @@
   }
 
   button:active { transform: translateY(2px); }
+  button[hidden] { display: none; }
+
+  button.recording {
+    background: #e2231a;
+    color: white;
+    animation: pulse 0.8s infinite alternate;
+  }
+
+  @keyframes pulse {
+    from { transform: scale(1); }
+    to   { transform: scale(1.08); }
+  }
 
   /* ---------- Flying emojis ---------- */
   .pop {
@@ -166,6 +178,18 @@
     <button id="reset">🔄 Start over</button>
     <button id="sound">🔊 Sound on</button>
   </div>
+</div>
+
+
+<div class="card">
+  <h2>🎙️ Make your own clap sound</h2>
+  <p style="margin:0 0 10px">Record a silly sound and it plays every time you clap!</p>
+  <div class="buttons" style="justify-content:flex-start;margin-top:0">
+    <button id="record">🔴 Record</button>
+    <button id="play" hidden>▶️ Play it</button>
+    <button id="useBeep" hidden>🗑️ Go back to beep</button>
+  </div>
+  <p class="small" id="recordStatus" style="margin:10px 0 0">Now playing: the beep 🎵</p>
 </div>
 
 
@@ -285,11 +309,13 @@
     if (count % 10 === 0) {
       hintEl.textContent = "🎉 " + count + " claps! 🎉";
       for (var i = 0; i < 8; i++) flyEmoji();
-      playBeep(880, 0.25);
+      if (mySound) playMySound(1.25);   // a little higher for the big ones
+      else playBeep(880, 0.25);
     } else {
       hintEl.textContent = cheers[Math.floor(Math.random() * cheers.length)];
       flyEmoji();
-      playBeep(520 + Math.random() * 200, 0.1);
+      if (mySound) playMySound(1);
+      else playBeep(520 + Math.random() * 200, 0.1);
     }
   }
 
@@ -305,13 +331,154 @@
     setTimeout(function () { e.remove(); }, 1000);
   }
 
-  // A little "pop" sound made by the browser (no sound files needed)
   var audio = null;
+  function getAudio() {
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === "suspended") audio.resume();
+    return audio;
+  }
+
+  // ---------- Your own recorded sound ----------
+  var mySound = null;         // the recording, ready to play
+  var recorder = null;
+  var recordTimer = null;
+  var MAX_SECONDS = 3;
+
+  var recordBtn = document.getElementById("record");
+  var playBtn = document.getElementById("play");
+  var useBeepBtn = document.getElementById("useBeep");
+  var recordStatus = document.getElementById("recordStatus");
+
+  function showSoundButtons() {
+    playBtn.hidden = !mySound;
+    useBeepBtn.hidden = !mySound;
+    recordBtn.textContent = mySound ? "🔴 Record again" : "🔴 Record";
+    recordStatus.textContent = mySound ? "Now playing: your sound! 🎤" : "Now playing: the beep 🎵";
+  }
+
+  function playMySound(speed) {
+    if (!soundOn || !mySound) return;
+    try {
+      var ctx = getAudio();
+      var src = ctx.createBufferSource();
+      src.buffer = mySound;
+      src.playbackRate.value = speed || 1;
+      src.connect(ctx.destination);
+      src.start();
+    } catch (e) {}
+  }
+
+  // Cut off the quiet bits at the start and end so the sound plays right away
+  function trimQuiet(buffer) {
+    var data = buffer.getChannelData(0);
+    var loud = 0.03;
+    var start = 0, end = data.length - 1;
+    while (start < end && Math.abs(data[start]) < loud) start++;
+    while (end > start && Math.abs(data[end]) < loud) end--;
+    if (end - start < 100) return buffer;            // nothing loud, keep it all
+    start = Math.max(0, start - Math.floor(buffer.sampleRate * 0.01));
+    end = Math.min(data.length, end + Math.floor(buffer.sampleRate * 0.05));
+    var out = getAudio().createBuffer(buffer.numberOfChannels, end - start, buffer.sampleRate);
+    for (var c = 0; c < buffer.numberOfChannels; c++) {
+      out.getChannelData(c).set(buffer.getChannelData(c).subarray(start, end));
+    }
+    return out;
+  }
+
+  // Turn the saved recording into something we can play
+  function loadSound(arrayBuffer, done) {
+    getAudio().decodeAudioData(arrayBuffer, function (buffer) {
+      mySound = trimQuiet(buffer);
+      showSoundButtons();
+      if (done) done(true);
+    }, function () {
+      if (done) done(false);
+    });
+  }
+
+  function startRecording() {
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      recordStatus.textContent = "Sorry, this browser can't record sounds 😢";
+      return;
+    }
+    getAudio();   // wake up the sound now, while the button is being tapped
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+      var pieces = [];
+      recorder = new MediaRecorder(stream);
+      recorder.ondataavailable = function (e) { if (e.data.size) pieces.push(e.data); };
+      recorder.onstop = function () {
+        stream.getTracks().forEach(function (t) { t.stop(); });   // turn the mic off
+        recordBtn.classList.remove("recording");
+        var blob = new Blob(pieces, { type: recorder.mimeType });
+        recorder = null;
+        recordStatus.textContent = "Getting your sound ready...";
+        blob.arrayBuffer().then(function (bytes) {
+          loadSound(bytes.slice(0), function (ok) {
+            if (!ok) { recordStatus.textContent = "Hmm, that didn't work. Try again!"; return; }
+            playMySound(1);
+            saveSound(blob);
+          });
+        });
+      };
+      recorder.start();
+      recordBtn.classList.add("recording");
+      recordBtn.textContent = "⏹️ Stop";
+      recordStatus.textContent = "Recording... make your sound! 🎤";
+      recordTimer = setTimeout(stopRecording, MAX_SECONDS * 1000);
+    }).catch(function () {
+      recordStatus.textContent = "The iPad said no to the microphone. Check Settings → Safari → Microphone.";
+    });
+  }
+
+  function stopRecording() {
+    clearTimeout(recordTimer);
+    if (recorder && recorder.state === "recording") recorder.stop();
+  }
+
+  // Keep the recording on this iPad so it's still there next time
+  function saveSound(blob) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      try { localStorage.setItem("clapSound", reader.result); } catch (e) {}
+    };
+    reader.readAsDataURL(blob);
+  }
+
+  function loadSavedSound() {
+    var saved = null;
+    try { saved = localStorage.getItem("clapSound"); } catch (e) {}
+    if (!saved) return;
+    fetch(saved).then(function (r) { return r.arrayBuffer(); }).then(function (bytes) {
+      loadSound(bytes);
+    }).catch(function () {});
+  }
+
+  recordBtn.addEventListener("click", function () {
+    recordBtn.blur();   // so SPACE doesn't press this button
+    if (recorder) stopRecording();
+    else startRecording();
+  });
+
+  playBtn.addEventListener("click", function () {
+    playBtn.blur();
+    playMySound(1);
+  });
+
+  useBeepBtn.addEventListener("click", function () {
+    useBeepBtn.blur();
+    mySound = null;
+    try { localStorage.removeItem("clapSound"); } catch (e) {}
+    showSoundButtons();
+    playBeep(600, 0.1);
+  });
+
+  loadSavedSound();
+
+  // A little "pop" sound made by the browser (no sound files needed)
   function playBeep(freq, length) {
     if (!soundOn) return;
     try {
-      if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
-      if (audio.state === "suspended") audio.resume();
+      getAudio();
       var osc = audio.createOscillator();
       var gain = audio.createGain();
       osc.type = "triangle";
@@ -351,7 +518,8 @@
     soundOn = !soundOn;
     soundBtn.textContent = soundOn ? "🔊 Sound on" : "🔇 Sound off";
     soundBtn.blur();
-    if (soundOn) playBeep(600, 0.1);
+    if (soundOn && mySound) playMySound(1);
+    else if (soundOn) playBeep(600, 0.1);
   });
 </script>
 
