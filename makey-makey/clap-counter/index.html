@@ -60,6 +60,9 @@
     text-shadow: 6px 6px 0 rgba(0, 0, 0, 0.25);
     font-variant-numeric: tabular-nums;
     transition: transform 0.08s;
+    /* gets smaller when the number has lots of digits */
+    --digits: 1;
+    font-size: min(220px, calc(min(100vw, 760px) * 1.15 / var(--digits)));
   }
 
   .number.bump { transform: scale(1.25); }
@@ -158,8 +161,39 @@
 
   .small { font-size: 15px; }
 
+  /* ---------- Clap Shop ---------- */
+  .helpers {
+    font-size: 30px;
+    min-height: 40px;
+    letter-spacing: 2px;
+    word-break: break-all;
+  }
+
+  .alltime { font-size: 15px; margin: 0; }
+
+  .shop-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px 0;
+    border-top: 2px dashed rgba(0, 0, 0, 0.3);
+  }
+  .shop-item:first-of-type { border-top: none; }
+
+  .shop-emoji { font-size: 48px; line-height: 1; }
+  .shop-info { flex: 1; }
+  .shop-info b { font-size: 20px; }
+  .shop-info p { margin: 0; font-size: 15px; }
+
+  .shop-item button { white-space: nowrap; }
+  .shop-item button:disabled {
+    opacity: 0.45;
+    cursor: default;
+    transform: none;
+  }
+  .shop-item button.can-buy { background: gold; }
+
   @media (max-width: 600px) {
-    .number { font-size: 150px; }
     .modes { grid-template-columns: 1fr; }
   }
 </style>
@@ -174,10 +208,19 @@
 <div class="counter">
   <div class="number" id="number">0</div>
   <p class="hint" id="hint">Clap or high five to start!</p>
+  <p class="alltime" id="alltime"></p>
+  <div class="helpers" id="helpers"></div>
   <div class="buttons">
     <button id="reset">🔄 Start over</button>
     <button id="sound">🔊 Sound on</button>
   </div>
+</div>
+
+
+<div class="card">
+  <h2>🏪 Clap Shop</h2>
+  <p style="margin:0 0 6px">Spend your claps on helpers that clap for you!</p>
+  <div id="shop"></div>
 </div>
 
 
@@ -287,43 +330,156 @@
 
   // Remember the count if the page reloads
   try { count = parseInt(localStorage.getItem("clapCount"), 10) || 0; } catch (e) {}
-  numberEl.textContent = count;
+
+  function showCount() {
+    numberEl.textContent = count;
+    numberEl.style.setProperty("--digits", Math.max(1, String(count).length));
+    alltimeEl.textContent = allTime > count ? "All-time claps: " + allTime : "";
+    updateShop();
+  }
 
   function save() {
-    try { localStorage.setItem("clapCount", count); } catch (e) {}
+    try {
+      localStorage.setItem("clapCount", count);
+      localStorage.setItem("clapAllTime", allTime);
+      localStorage.setItem("clapOwned", JSON.stringify(owned));
+    } catch (e) {}
   }
+
+  // ---------- Clap Shop ----------
+  // CALEB CAN CHANGE THESE! cost = how many claps it costs at first
+  var prizes = [
+    { id: "glove", emoji: "🧤", name: "Clappy Glove", cost: 10,  grow: 1.5, about: "Every clap counts +1 more." },
+    { id: "robot", emoji: "🤖", name: "Clap Robot",   cost: 25,  grow: 1.5, about: "Claps by itself every 2 seconds." },
+    { id: "seal",  emoji: "🦭", name: "Clapping Seal", cost: 75, grow: 1.5, about: "Claps by itself every second." },
+    { id: "gold",  emoji: "🌟", name: "Golden Hands", cost: 300, grow: 4,   about: "Doubles ALL your claps!" }
+  ];
+
+  var allTime = count;
+  var owned = { glove: 0, robot: 0, seal: 0, gold: 0 };
+  try {
+    allTime = parseInt(localStorage.getItem("clapAllTime"), 10) || count;
+    var savedOwned = JSON.parse(localStorage.getItem("clapOwned"));
+    if (savedOwned) for (var k in owned) owned[k] = savedOwned[k] || 0;
+  } catch (e) {}
+
+  var alltimeEl = document.getElementById("alltime");
+  var helpersEl = document.getElementById("helpers");
+  var shopEl = document.getElementById("shop");
+
+  function priceOf(prize) {
+    return Math.round(prize.cost * Math.pow(prize.grow, owned[prize.id]));
+  }
+
+  function multiplier() {
+    return Math.pow(2, owned.gold);
+  }
+
+  function clapsPerClap() {
+    return (1 + owned.glove) * multiplier();
+  }
+
+  // Build the shop buttons once
+  prizes.forEach(function (prize) {
+    var row = document.createElement("div");
+    row.className = "shop-item";
+    row.innerHTML =
+      '<div class="shop-emoji">' + prize.emoji + '</div>' +
+      '<div class="shop-info"><b>' + prize.name + '</b><p>' + prize.about + '</p>' +
+      '<p class="have"></p></div>' +
+      '<button></button>';
+    var btn = row.querySelector("button");
+    btn.addEventListener("click", function () {
+      btn.blur();   // so SPACE doesn't press this button
+      buy(prize);
+    });
+    prize.row = row;
+    shopEl.appendChild(row);
+  });
+
+  function updateShop() {
+    prizes.forEach(function (prize) {
+      var price = priceOf(prize);
+      var btn = prize.row.querySelector("button");
+      btn.textContent = "Buy for " + price + " 👏";
+      btn.disabled = count < price;
+      btn.classList.toggle("can-buy", count >= price);
+      prize.row.querySelector(".have").textContent =
+        owned[prize.id] ? "You have " + owned[prize.id] : "";
+    });
+
+    var line = "";
+    prizes.forEach(function (prize) {
+      for (var i = 0; i < Math.min(owned[prize.id], 20); i++) line += prize.emoji;
+    });
+    helpersEl.textContent = line;
+  }
+
+  function buy(prize) {
+    var price = priceOf(prize);
+    if (count < price) return;
+    count = count - price;
+    owned[prize.id] = owned[prize.id] + 1;
+    save();
+    showCount();
+    hintEl.textContent = "You got a " + prize.name + "! " + prize.emoji;
+    for (var i = 0; i < 5; i++) flyEmoji(prize.emoji);
+    playBeep(660, 0.08);
+    setTimeout(function () { playBeep(990, 0.15); }, 90);
+  }
+
+  // Robots and seals clap by themselves
+  var ticks = 0;
+  setInterval(function () {
+    ticks = ticks + 1;
+    var auto = owned.seal;
+    if (ticks % 2 === 0) auto = auto + owned.robot;
+    if (auto === 0) return;
+    auto = auto * multiplier();
+    count = count + auto;
+    allTime = allTime + auto;
+    save();
+    showCount();
+    flyEmoji(ticks % 2 === 0 && owned.robot ? "🤖" : "🦭");
+  }, 1000);
+
+  showCount();
 
   function addClap() {
     var now = Date.now();
     if (now - lastCount < WAIT) return;
     lastCount = now;
 
-    count = count + 1;
-    numberEl.textContent = count;
+    var before = count;
+    var add = clapsPerClap();
+    count = count + add;
+    allTime = allTime + add;
     save();
+    showCount();
 
     // make the number jump
     numberEl.classList.add("bump");
     setTimeout(function () { numberEl.classList.remove("bump"); }, 90);
 
-    if (count % 10 === 0) {
+    if (Math.floor(before / 10) !== Math.floor(count / 10)) {
       hintEl.textContent = "🎉 " + count + " claps! 🎉";
       for (var i = 0; i < 8; i++) flyEmoji();
       if (mySound) playMySound(1.25);   // a little higher for the big ones
       else playBeep(880, 0.25);
     } else {
-      hintEl.textContent = cheers[Math.floor(Math.random() * cheers.length)];
+      hintEl.textContent = add > 1 ? "+" + add + "! " + cheers[Math.floor(Math.random() * cheers.length)]
+                                   : cheers[Math.floor(Math.random() * cheers.length)];
       flyEmoji();
       if (mySound) playMySound(1);
       else playBeep(520 + Math.random() * 200, 0.1);
     }
   }
 
-  function flyEmoji() {
+  function flyEmoji(which) {
     var box = numberEl.getBoundingClientRect();
     var e = document.createElement("div");
     e.className = "pop";
-    e.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    e.textContent = which || emojis[Math.floor(Math.random() * emojis.length)];
     e.style.left = (box.left + box.width / 2 + (Math.random() - 0.5) * box.width) + "px";
     e.style.top = (box.top + box.height / 2) + "px";
     e.style.setProperty("--dx", ((Math.random() - 0.5) * 200) + "px");
@@ -507,11 +663,14 @@
   numberEl.addEventListener("pointerdown", addClap);
 
   resetBtn.addEventListener("click", function () {
+    resetBtn.blur();   // so SPACE doesn't press this button
+    if (!confirm("Start over? Your claps AND your helpers will go away.")) return;
     count = 0;
-    numberEl.textContent = 0;
+    allTime = 0;
+    for (var k in owned) owned[k] = 0;
     hintEl.textContent = "Clap or high five to start!";
     save();
-    resetBtn.blur();   // so SPACE doesn't press this button
+    showCount();
   });
 
   soundBtn.addEventListener("click", function () {
