@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+<!-- The name of the page (shows in the browser tab) -->
+<title>Clap Counter</title>
+
+<!-- Clapping hands favicon (shows in the browser tab) -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👏</text></svg>">
+
+<style>
+  /* CALEB PICKS THESE COLORS.
+     Try: lightseagreen, turquoise, hotpink, gold, tomato, orange */
+  :root {
+    --background: lightseagreen;
+    --number-color: white;
+    --text-color: black;
+    --card: rgba(255, 255, 255, 0.85);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--background);
+    color: var(--text-color);
+    font-family: Verdana, sans-serif;
+    font-size: 18px;
+    line-height: 1.6;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 20px 16px 60px;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  a { color: inherit; }
+
+  h1 {
+    text-align: center;
+    font-size: 44px;
+    margin: 10px 0 0;
+    letter-spacing: 1px;
+  }
+
+  /* ---------- The big counter ---------- */
+  .counter {
+    text-align: center;
+    margin: 10px 0 20px;
+  }
+
+  .number {
+    display: inline-block;
+    font-size: 220px;
+    font-weight: bold;
+    line-height: 1;
+    color: var(--number-color);
+    text-shadow: 6px 6px 0 rgba(0, 0, 0, 0.25);
+    font-variant-numeric: tabular-nums;
+    transition: transform 0.08s;
+  }
+
+  .number.bump { transform: scale(1.25); }
+
+  .hint {
+    font-size: 20px;
+    margin: 6px 0 0;
+    min-height: 32px;
+  }
+
+  .buttons {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+  }
+
+  button {
+    font: inherit;
+    font-size: 18px;
+    padding: 10px 20px;
+    border: 3px solid black;
+    border-radius: 14px;
+    background: white;
+    cursor: pointer;
+  }
+
+  button:active { transform: translateY(2px); }
+
+  /* ---------- Flying emojis ---------- */
+  .pop {
+    position: fixed;
+    font-size: 60px;
+    pointer-events: none;
+    animation: fly 1s ease-out forwards;
+  }
+
+  @keyframes fly {
+    from { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
+    to   { transform: translate(calc(-50% + var(--dx)), calc(-50% - 220px)) scale(1.4); opacity: 0; }
+  }
+
+  /* ---------- Instructions ---------- */
+  .card {
+    background: var(--card);
+    border: 3px solid black;
+    border-radius: 18px;
+    padding: 16px 20px;
+    margin-top: 24px;
+  }
+
+  .card h2 { margin: 0 0 8px; font-size: 26px; }
+
+  .card ol { padding-left: 24px; margin: 0; }
+  .card li { margin-bottom: 10px; }
+
+  .tag {
+    display: inline-block;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-weight: bold;
+    color: white;
+  }
+  .tag.space { background: #e2231a; }
+  .tag.earth { background: #333; }
+
+  .modes {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 12px;
+  }
+
+  .mode {
+    border: 2px dashed black;
+    border-radius: 14px;
+    padding: 10px 14px;
+  }
+
+  .mode h3 { margin: 0 0 6px; font-size: 20px; }
+  .mode svg { width: 100%; height: auto; display: block; }
+  .mode p { margin: 6px 0 0; font-size: 16px; }
+
+  .small { font-size: 15px; }
+
+  @media (max-width: 600px) {
+    .number { font-size: 150px; }
+    .modes { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+
+<body>
+
+<p class="small"><a href="/">← back to Caleb's website</a></p>
+
+<h1>👏 Clap Counter 👏</h1>
+
+<div class="counter">
+  <div class="number" id="number">0</div>
+  <p class="hint" id="hint">Clap or high five to start!</p>
+  <div class="buttons">
+    <button id="reset">🔄 Start over</button>
+    <button id="sound">🔊 Sound on</button>
+  </div>
+</div>
+
+
+<div class="card">
+  <h2>🔌 How to hook it up</h2>
+  <ol>
+    <li>Plug the <b>Makey Makey</b> USB cable into the <b>USB-C adapter</b>, then plug the adapter into the iPad.
+      A little light on the Makey Makey turns on.</li>
+    <li>Clip one alligator clip onto <span class="tag space">SPACE</span> (the round spot on the front).</li>
+    <li>Clip another alligator clip onto <span class="tag earth">EARTH</span> (the strip along the bottom).</li>
+    <li>Pick a way to play below 👇</li>
+    <li>Tap this page once so the iPad is listening. Then clap!</li>
+  </ol>
+
+  <div class="modes">
+    <div class="mode">
+      <h3>🙌 High five (2 people)</h3>
+      <svg viewBox="0 0 300 150" role="img" aria-label="Person 1 holds the Space clip, person 2 holds the Earth clip, and they high five">
+        <!-- Makey Makey board -->
+        <rect x="110" y="110" width="80" height="34" rx="6" fill="#e2231a" stroke="black" stroke-width="2"/>
+        <circle cx="130" cy="127" r="7" fill="white" stroke="black"/>
+        <rect x="155" y="135" width="30" height="6" fill="#333"/>
+        <!-- wires -->
+        <path d="M130 120 C 100 90, 60 110, 55 95" fill="none" stroke="#e2231a" stroke-width="4"/>
+        <path d="M175 135 C 210 120, 245 115, 245 95" fill="none" stroke="#333" stroke-width="4"/>
+        <!-- person 1 -->
+        <circle cx="50" cy="30" r="16" fill="#ffd3a1" stroke="black" stroke-width="2"/>
+        <line x1="50" y1="46" x2="50" y2="95" stroke="black" stroke-width="4"/>
+        <line x1="50" y1="60" x2="55" y2="95" stroke="black" stroke-width="4"/>
+        <line x1="50" y1="58" x2="140" y2="28" stroke="black" stroke-width="4"/>
+        <!-- person 2 -->
+        <circle cx="250" cy="30" r="16" fill="#c98b5a" stroke="black" stroke-width="2"/>
+        <line x1="250" y1="46" x2="250" y2="95" stroke="black" stroke-width="4"/>
+        <line x1="250" y1="60" x2="245" y2="95" stroke="black" stroke-width="4"/>
+        <line x1="250" y1="58" x2="160" y2="28" stroke="black" stroke-width="4"/>
+        <!-- spark -->
+        <text x="150" y="34" font-size="26" text-anchor="middle">💥</text>
+      </svg>
+      <p>Person 1 holds the metal end of the <span class="tag space">SPACE</span> clip.
+         Person 2 holds the metal end of the <span class="tag earth">EARTH</span> clip.
+         High five! Each high five = +1.</p>
+    </div>
+
+    <div class="mode">
+      <h3>👏 Clap (1 person)</h3>
+      <svg viewBox="0 0 300 150" role="img" aria-label="One person has foil on each hand, one connected to Space and one to Earth, and claps">
+        <!-- Makey Makey board -->
+        <rect x="110" y="110" width="80" height="34" rx="6" fill="#e2231a" stroke="black" stroke-width="2"/>
+        <circle cx="130" cy="127" r="7" fill="white" stroke="black"/>
+        <rect x="155" y="135" width="30" height="6" fill="#333"/>
+        <!-- wires -->
+        <path d="M130 120 C 110 95, 125 75, 138 60" fill="none" stroke="#e2231a" stroke-width="4"/>
+        <path d="M175 135 C 190 110, 175 80, 162 60" fill="none" stroke="#333" stroke-width="4"/>
+        <!-- hands with foil -->
+        <ellipse cx="135" cy="40" rx="14" ry="26" fill="#ffd3a1" stroke="black" stroke-width="2" transform="rotate(15 135 40)"/>
+        <ellipse cx="165" cy="40" rx="14" ry="26" fill="#ffd3a1" stroke="black" stroke-width="2" transform="rotate(-15 165 40)"/>
+        <rect x="128" y="45" width="16" height="14" fill="#cfd6dc" stroke="black" transform="rotate(15 136 52)"/>
+        <rect x="156" y="45" width="16" height="14" fill="#cfd6dc" stroke="black" transform="rotate(-15 164 52)"/>
+        <!-- spark -->
+        <text x="150" y="16" font-size="22" text-anchor="middle">💥</text>
+        <line x1="90" y1="52" x2="126" y2="52" stroke="black" stroke-width="1.5"/>
+        <line x1="210" y1="52" x2="174" y2="52" stroke="black" stroke-width="1.5"/>
+        <text x="72" y="57" font-size="15" text-anchor="middle">foil</text>
+        <text x="228" y="57" font-size="15" text-anchor="middle">foil</text>
+      </svg>
+      <p>Wrap a piece of <b>foil</b> around each palm. Clip <span class="tag space">SPACE</span> to one foil
+         and <span class="tag earth">EARTH</span> to the other. When the foil touches = +1.</p>
+    </div>
+  </div>
+
+  <p class="small" style="margin-top:14px">
+    <b>Not counting?</b> Make sure the clips touch bare skin or foil (not sleeves),
+    the Makey Makey light is on, and you tapped the page once.
+    Holding hands together only counts as 1 — let go and clap again!
+  </p>
+</div>
+
+<hr>
+<p class="small">Made by Auntie Anne and Caleb</p>
+
+
+<script>
+  var count = 0;
+  var lastCount = 0;          // time of the last clap
+  var WAIT = 150;             // milliseconds to wait before another clap counts
+  var soundOn = true;
+
+  var numberEl = document.getElementById("number");
+  var hintEl = document.getElementById("hint");
+  var resetBtn = document.getElementById("reset");
+  var soundBtn = document.getElementById("sound");
+
+  var cheers = ["Nice!", "Awesome!", "Keep going!", "Wow!", "So loud!", "Super clapper!"];
+  var emojis = ["👏", "🙌", "⭐", "🎉", "✨", "💥"];
+
+  // Remember the count if the page reloads
+  try { count = parseInt(localStorage.getItem("clapCount"), 10) || 0; } catch (e) {}
+  numberEl.textContent = count;
+
+  function save() {
+    try { localStorage.setItem("clapCount", count); } catch (e) {}
+  }
+
+  function addClap() {
+    var now = Date.now();
+    if (now - lastCount < WAIT) return;
+    lastCount = now;
+
+    count = count + 1;
+    numberEl.textContent = count;
+    save();
+
+    // make the number jump
+    numberEl.classList.add("bump");
+    setTimeout(function () { numberEl.classList.remove("bump"); }, 90);
+
+    if (count % 10 === 0) {
+      hintEl.textContent = "🎉 " + count + " claps! 🎉";
+      for (var i = 0; i < 8; i++) flyEmoji();
+      playBeep(880, 0.25);
+    } else {
+      hintEl.textContent = cheers[Math.floor(Math.random() * cheers.length)];
+      flyEmoji();
+      playBeep(520 + Math.random() * 200, 0.1);
+    }
+  }
+
+  function flyEmoji() {
+    var box = numberEl.getBoundingClientRect();
+    var e = document.createElement("div");
+    e.className = "pop";
+    e.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+    e.style.left = (box.left + box.width / 2 + (Math.random() - 0.5) * box.width) + "px";
+    e.style.top = (box.top + box.height / 2) + "px";
+    e.style.setProperty("--dx", ((Math.random() - 0.5) * 200) + "px");
+    document.body.appendChild(e);
+    setTimeout(function () { e.remove(); }, 1000);
+  }
+
+  // A little "pop" sound made by the browser (no sound files needed)
+  var audio = null;
+  function playBeep(freq, length) {
+    if (!soundOn) return;
+    try {
+      if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === "suspended") audio.resume();
+      var osc = audio.createOscillator();
+      var gain = audio.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.3, audio.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + length);
+      osc.connect(gain);
+      gain.connect(audio.destination);
+      osc.start();
+      osc.stop(audio.currentTime + length);
+    } catch (e) {}
+  }
+
+  // The Makey Makey pretends to be a keyboard. SPACE is the one we use,
+  // but the arrow keys work too in case a clip is on a different spot.
+  var clapKeys = [" ", "Spacebar", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"];
+
+  document.addEventListener("keydown", function (event) {
+    if (clapKeys.indexOf(event.key) === -1) return;
+    event.preventDefault();          // stop Space from scrolling the page
+    if (event.repeat) return;        // holding hands together only counts once
+    addClap();
+  });
+
+  // Tap the big number to test without the Makey Makey
+  numberEl.addEventListener("pointerdown", addClap);
+
+  resetBtn.addEventListener("click", function () {
+    count = 0;
+    numberEl.textContent = 0;
+    hintEl.textContent = "Clap or high five to start!";
+    save();
+    resetBtn.blur();   // so SPACE doesn't press this button
+  });
+
+  soundBtn.addEventListener("click", function () {
+    soundOn = !soundOn;
+    soundBtn.textContent = soundOn ? "🔊 Sound on" : "🔇 Sound off";
+    soundBtn.blur();
+    if (soundOn) playBeep(600, 0.1);
+  });
+</script>
+
+</body>
+</html>
