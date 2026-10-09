@@ -161,6 +161,13 @@
 
   .small { font-size: 15px; }
 
+  /* ---------- Sound helper ---------- */
+  summary { cursor: pointer; }
+  summary h2 { display: inline; }
+  .sound-info { list-style: none; padding: 0; margin: 10px 0; font-size: 16px; }
+  .sound-info li { margin-bottom: 4px; }
+  .sound-help h3 { margin: 16px 0 6px; font-size: 20px; }
+
   /* ---------- Clap Shop ---------- */
   .helpers {
     font-size: 30px;
@@ -233,6 +240,42 @@
     <button id="useBeep" hidden>🗑️ Go back to beep</button>
   </div>
   <p class="small" id="recordStatus" style="margin:10px 0 0">Now playing: the beep 🎵</p>
+</div>
+
+
+<div class="card sound-help">
+  <details id="soundHelp">
+    <summary><h2>🔧 Sound not working?</h2></summary>
+
+    <p>Tap each test button. Did you hear it?</p>
+    <div class="buttons" style="justify-content:flex-start;margin-top:0">
+      <button id="testBeep">🔔 Test beep</button>
+      <button id="testMusic">🎵 Test video-style sound</button>
+      <button id="testMine" hidden>🎤 Test my sound</button>
+    </div>
+    <ul class="sound-info" id="soundInfo"></ul>
+
+    <p><b>Heard 🎵 but not 🔔?</b> The iPad is in <b>Silent mode</b> (see #1 below).
+       Videos and Spotify still play in Silent mode, but game sounds don't.</p>
+    <p><b>Didn't hear either one?</b> Check the volume and Bluetooth (#2 and #3).</p>
+
+    <h3>Check these on the iPad</h3>
+    <ol>
+      <li><b>Silent mode</b> (the usual problem!). Swipe down from the top-right corner of the screen.
+          If the 🔔 bell is crossed out, tap it to turn sound on. (Older iPads with a little switch on the
+          side: flip it so no orange shows.)</li>
+      <li><b>Volume.</b> Press the volume-up button while you're on this page.</li>
+      <li><b>Bluetooth.</b> Make sure the sound isn't going to headphones or a speaker in another room.
+          In Control Center, tap the AirPlay icon on the music box and pick <i>iPad</i>.</li>
+      <li><b>Microphone (for recording).</b> In Safari, tap <b>aA</b> or the page menu next to the
+          web address → <b>Website Settings</b> → <b>Microphone</b> → <b>Allow</b>.
+          If the iPad uses Screen Time: <b>Settings → Screen Time → Content &amp; Privacy Restrictions
+          → Microphone → Allow Changes</b>.</li>
+      <li><b>Headphones too quiet?</b> <b>Settings → Sounds → Headphone Safety → Reduce Loud Audio</b>
+          (Screen Time may lock this one).</li>
+      <li>Still stuck? Reload this page, tap the screen once, and try the tests again.</li>
+    </ol>
+  </details>
 </div>
 
 
@@ -488,14 +531,59 @@
   }
 
   var audio = null;
+  var micOn = false;
   function getAudio() {
+    if (!micOn) setAudioMode("playback");
     if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
     if (audio.state === "suspended") audio.resume();
     return audio;
   }
 
+  // iPads play game sounds in "ambient" mode, which goes quiet when the iPad is on
+  // Silent. "playback" mode plays sound like a video does, even on Silent.
+  function setAudioMode(mode) {
+    try {
+      if (navigator.audioSession && navigator.audioSession.type !== mode) {
+        navigator.audioSession.type = mode;
+      }
+    } catch (e) {}
+  }
+
+  // Make a .wav sound file in code (used for the tests and the backup trick)
+  function makeWav(seconds, freq) {
+    var rate = 22050, n = Math.floor(rate * seconds);
+    var buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    function str(at, t) { for (var i = 0; i < t.length; i++) v.setUint8(at + i, t.charCodeAt(i)); }
+    str(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); str(8, "WAVE"); str(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true);
+    v.setUint16(34, 16, true); str(36, "data"); v.setUint32(40, n * 2, true);
+    for (var i = 0; i < n; i++) {
+      var fade = Math.min(1, (n - i) / (rate * 0.05));
+      v.setInt16(44 + i * 2, freq ? Math.sin(2 * Math.PI * freq * i / rate) * 9000 * fade : 0, true);
+    }
+    return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+  }
+
+  // Backup trick for older iPads: quietly play a silent video-style sound on a loop,
+  // which makes the iPad use "playback" mode for everything on the page.
+  var silentLoop = null;
+  function keepSoundAwake() {
+    if (navigator.audioSession) return;   // newer iPads don't need it
+    if (!silentLoop) {
+      silentLoop = new Audio(makeWav(0.5, 0));
+      silentLoop.loop = true;
+      silentLoop.setAttribute("playsinline", "");
+    }
+    if (silentLoop.paused) silentLoop.play().catch(function () {});
+  }
+  ["pointerdown", "keydown"].forEach(function (type) {
+    document.addEventListener(type, function () { keepSoundAwake(); getAudio(); }, true);
+  });
+
   // ---------- Your own recorded sound ----------
   var mySound = null;         // the recording, ready to play
+  var soundFacts = null;      // how long and how loud the recording is
   var recorder = null;
   var recordTimer = null;
   var MAX_SECONDS = 3;
@@ -510,6 +598,10 @@
     useBeepBtn.hidden = !mySound;
     recordBtn.textContent = mySound ? "🔴 Record again" : "🔴 Record";
     recordStatus.textContent = mySound ? "Now playing: your sound! 🎤" : "Now playing: the beep 🎵";
+    if (soundFacts && soundFacts.loudest < 0.05) {
+      recordStatus.textContent = "Your sound is really quiet! Try recording again closer to the iPad. 🎤";
+    }
+    showSoundInfo();
   }
 
   function playMySound(speed) {
@@ -527,13 +619,16 @@
   // Cut off the quiet bits at the start and end so the sound plays right away
   function trimQuiet(buffer) {
     var data = buffer.getChannelData(0);
-    var loud = 0.03;
+    var loudest = 0;
+    for (var i = 0; i < data.length; i++) loudest = Math.max(loudest, Math.abs(data[i]));
+    soundFacts = { recorded: buffer.duration, loudest: loudest };
+    var loud = Math.max(0.01, loudest * 0.1);   // "quiet" means under 1/10 of the loudest part
     var start = 0, end = data.length - 1;
     while (start < end && Math.abs(data[start]) < loud) start++;
     while (end > start && Math.abs(data[end]) < loud) end--;
     if (end - start < 100) return buffer;            // nothing loud, keep it all
     start = Math.max(0, start - Math.floor(buffer.sampleRate * 0.01));
-    end = Math.min(data.length, end + Math.floor(buffer.sampleRate * 0.05));
+    end = Math.min(data.length, end + Math.floor(buffer.sampleRate * 0.15));
     var out = getAudio().createBuffer(buffer.numberOfChannels, end - start, buffer.sampleRate);
     for (var c = 0; c < buffer.numberOfChannels; c++) {
       out.getChannelData(c).set(buffer.getChannelData(c).subarray(start, end));
@@ -558,12 +653,16 @@
       return;
     }
     getAudio();   // wake up the sound now, while the button is being tapped
+    micOn = true;
+    setAudioMode("play-and-record");
     navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
       var pieces = [];
       recorder = new MediaRecorder(stream);
       recorder.ondataavailable = function (e) { if (e.data.size) pieces.push(e.data); };
       recorder.onstop = function () {
         stream.getTracks().forEach(function (t) { t.stop(); });   // turn the mic off
+        micOn = false;
+        setAudioMode("playback");
         recordBtn.classList.remove("recording");
         var blob = new Blob(pieces, { type: recorder.mimeType });
         recorder = null;
@@ -571,7 +670,8 @@
         blob.arrayBuffer().then(function (bytes) {
           loadSound(bytes.slice(0), function (ok) {
             if (!ok) { recordStatus.textContent = "Hmm, that didn't work. Try again!"; return; }
-            playMySound(1);
+            // wait a moment for the iPad to switch from the mic back to the speaker
+            setTimeout(function () { playMySound(1); }, 400);
             saveSound(blob);
           });
         });
@@ -582,7 +682,9 @@
       recordStatus.textContent = "Recording... make your sound! 🎤";
       recordTimer = setTimeout(stopRecording, MAX_SECONDS * 1000);
     }).catch(function () {
-      recordStatus.textContent = "The iPad said no to the microphone. Check Settings → Safari → Microphone.";
+      micOn = false;
+      setAudioMode("playback");
+      recordStatus.textContent = "The iPad said no to the microphone. Open \"🔧 Sound not working?\" below (#4).";
     });
   }
 
@@ -623,12 +725,67 @@
   useBeepBtn.addEventListener("click", function () {
     useBeepBtn.blur();
     mySound = null;
+    soundFacts = null;
     try { localStorage.removeItem("clapSound"); } catch (e) {}
     showSoundButtons();
     playBeep(600, 0.1);
   });
 
   loadSavedSound();
+
+  // ---------- Sound helper ----------
+  var soundInfoEl = document.getElementById("soundInfo");
+  var testMineBtn = document.getElementById("testMine");
+
+  function showSoundInfo() {
+    var lines = [];
+    lines.push("🔊 Sound on this page: " + (soundOn ? "on" : "OFF (tap 🔇 Sound off at the top)"));
+    lines.push("⚙️ Sound engine: " + (!audio ? "not started yet (tap anywhere)" :
+      audio.state === "running" ? "running ✅" : audio.state + " (tap anywhere to wake it up)"));
+    lines.push("📱 Plays on Silent mode: " + (navigator.audioSession
+      ? (navigator.audioSession.type === "playback" ? "yes ✅" : "not yet (tap anywhere)")
+      : "using the backup trick for older iPads"));
+    if (soundFacts) {
+      var pct = Math.round(soundFacts.loudest * 100);
+      lines.push("🎤 Your sound: " + mySound.duration.toFixed(1) + " seconds, loudness " + pct + "%" +
+        (pct < 5 ? " (too quiet! record closer to the iPad)" : " ✅"));
+    } else {
+      lines.push("🎤 Your sound: none yet, using the beep");
+    }
+    soundInfoEl.innerHTML = "";
+    lines.forEach(function (t) {
+      var li = document.createElement("li");
+      li.textContent = t;
+      soundInfoEl.appendChild(li);
+    });
+    testMineBtn.hidden = !mySound;
+  }
+
+  var musicTest = null;
+  document.getElementById("testBeep").addEventListener("click", function () {
+    this.blur();
+    getAudio();
+    var was = soundOn; soundOn = true;
+    playBeep(660, 0.4);
+    soundOn = was;
+    setTimeout(showSoundInfo, 100);
+  });
+  document.getElementById("testMusic").addEventListener("click", function () {
+    this.blur();
+    if (!musicTest) musicTest = new Audio(makeWav(0.6, 520));
+    musicTest.currentTime = 0;
+    musicTest.play().catch(function () {});
+    setTimeout(showSoundInfo, 100);
+  });
+  testMineBtn.addEventListener("click", function () {
+    this.blur();
+    var was = soundOn; soundOn = true;
+    playMySound(1);
+    soundOn = was;
+    setTimeout(showSoundInfo, 100);
+  });
+  document.getElementById("soundHelp").addEventListener("toggle", showSoundInfo);
+  showSoundInfo();
 
   // A little "pop" sound made by the browser (no sound files needed)
   function playBeep(freq, length) {
@@ -676,6 +833,7 @@
   soundBtn.addEventListener("click", function () {
     soundOn = !soundOn;
     soundBtn.textContent = soundOn ? "🔊 Sound on" : "🔇 Sound off";
+    showSoundInfo();
     soundBtn.blur();
     if (soundOn && mySound) playMySound(1);
     else if (soundOn) playBeep(600, 0.1);
