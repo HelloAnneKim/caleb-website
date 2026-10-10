@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+
+<!-- The name of the page (shows in the browser tab) -->
+<title>Race Track</title>
+
+<!-- Checkered flag favicon (shows in the browser tab) -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏁</text></svg>">
+
+<style>
+  /* CALEB PICKS THESE COLORS.
+     Try: lightseagreen, turquoise, hotpink, gold, tomato, orange */
+  :root {
+    --background: lightseagreen;
+    --text-color: black;
+    --red: #e2231a;
+    --blue: #1f6fe5;
+    --road: #3d3d3d;
+    --card: rgba(255, 255, 255, 0.85);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--background);
+    color: var(--text-color);
+    font-family: Verdana, sans-serif;
+    font-size: 18px;
+    line-height: 1.6;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px 16px 60px;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  a { color: inherit; }
+
+  h1 {
+    text-align: center;
+    font-size: 44px;
+    margin: 10px 0 10px;
+  }
+
+  /* ---------- The race track ---------- */
+  .track {
+    position: relative;
+    background: var(--road);
+    border: 4px solid black;
+    border-radius: 16px;
+    padding: 10px 0;
+    overflow: hidden;
+  }
+
+  .lane {
+    position: relative;
+    height: 96px;
+    margin: 0 30px 0 0;
+  }
+
+  .lane + .lane { border-top: 4px dashed #f5d90a; }
+
+  .lane-name {
+    position: absolute;
+    left: 10px;
+    top: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    color: white;
+    opacity: 0.85;
+    z-index: 1;
+  }
+
+  .lane-hint {
+    position: absolute;
+    right: 10px;
+    top: 4px;
+    font-size: 15px;
+    font-weight: bold;
+    color: gold;
+    z-index: 1;
+  }
+
+  /* the checkered finish line */
+  .finish {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 30px;
+    background:
+      repeating-conic-gradient(white 0 25%, black 0 50%) 0 0 / 15px 15px;
+  }
+
+  .car {
+    position: absolute;
+    top: 14px;
+    width: 110px;
+    height: 70px;
+    /* --p goes from 0 (start) to 1 (finish) */
+    --p: 0;
+    left: calc((100% - 110px) * var(--p));
+    transition: left 0.12s ease-out;
+  }
+
+  .car svg { width: 100%; height: 100%; display: block; }
+
+  .car.wiggle { animation: wiggle 0.25s; }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(0); }
+    30% { transform: rotate(-6deg); }
+    70% { transform: rotate(6deg); }
+  }
+
+  .car.winner { animation: hop 0.5s infinite alternate; }
+  @keyframes hop {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-10px); }
+  }
+
+  /* big 3-2-1-GO! and the winner message */
+  .overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 90px;
+    font-weight: bold;
+    color: white;
+    text-shadow: 4px 4px 0 black;
+    pointer-events: none;
+    z-index: 2;
+  }
+  .overlay.small { font-size: 46px; }
+  .overlay.pop { animation: grow 0.6s ease-out; }
+  @keyframes grow {
+    from { transform: scale(2); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+
+  .controls {
+    text-align: center;
+    margin-top: 14px;
+  }
+
+  .message {
+    font-size: 22px;
+    font-weight: bold;
+    min-height: 36px;
+    margin: 8px 0 0;
+  }
+
+  .buttons {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+  }
+
+  button, select {
+    font: inherit;
+    font-size: 18px;
+    padding: 10px 20px;
+    border: 3px solid black;
+    border-radius: 14px;
+    background: white;
+    color: black;
+    cursor: pointer;
+  }
+
+  button:active { transform: translateY(2px); }
+  button:disabled { opacity: 0.45; cursor: default; transform: none; }
+
+  #start {
+    font-size: 26px;
+    padding: 12px 34px;
+    background: gold;
+  }
+
+  .tap-test {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    font-size: 15px;
+  }
+  .tap-test button {
+    padding: 6px 16px;
+    font-size: 20px;
+    touch-action: manipulation;
+  }
+  .tap-test .red-btn { border-color: var(--red); }
+  .tap-test .blue-btn { border-color: var(--blue); }
+
+  .pop {
+    position: fixed;
+    font-size: 50px;
+    pointer-events: none;
+    animation: fly 1.4s ease-out forwards;
+    z-index: 5;
+  }
+  @keyframes fly {
+    from { transform: translate(-50%, -50%) scale(0.6); opacity: 1; }
+    to   { transform: translate(calc(-50% + var(--dx)), calc(-50% - 260px)) scale(1.4) rotate(40deg); opacity: 0; }
+  }
+
+  /* ---------- Cards ---------- */
+  .card {
+    background: var(--card);
+    border: 3px solid black;
+    border-radius: 18px;
+    padding: 16px 20px;
+    margin-top: 24px;
+  }
+
+  .card h2 { margin: 0 0 8px; font-size: 26px; }
+  .card ol { padding-left: 24px; margin: 0; }
+  .card li { margin-bottom: 10px; }
+
+  /* ---------- Scoreboard ---------- */
+  .scoreboard {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    text-align: center;
+  }
+
+  .score {
+    border: 4px solid;
+    border-radius: 16px;
+    padding: 10px;
+    background: white;
+  }
+  .score.red { border-color: var(--red); }
+  .score.blue { border-color: var(--blue); }
+
+  .score input {
+    font: inherit;
+    font-size: 20px;
+    font-weight: bold;
+    width: 100%;
+    text-align: center;
+    border: none;
+    border-bottom: 2px dashed #999;
+    background: transparent;
+    -webkit-user-select: text;
+    user-select: text;
+  }
+  .score.red input { color: var(--red); }
+  .score.blue input { color: var(--blue); }
+
+  .wins { font-size: 64px; font-weight: bold; line-height: 1.1; }
+  .vs { font-size: 28px; font-weight: bold; }
+
+  .leader { text-align: center; font-size: 22px; font-weight: bold; margin: 14px 0 4px; }
+  .history { text-align: center; font-size: 26px; letter-spacing: 4px; min-height: 36px; }
+  .best { text-align: center; margin: 4px 0 0; }
+
+  .tag {
+    display: inline-block;
+    padding: 0 8px;
+    border-radius: 6px;
+    font-weight: bold;
+    color: white;
+  }
+  .tag.red { background: var(--red); }
+  .tag.blue { background: var(--blue); }
+  .tag.earth { background: #333; }
+
+  .diagram { width: 100%; height: auto; display: block; margin: 8px 0 14px; }
+
+  .small { font-size: 15px; }
+
+  summary { cursor: pointer; }
+  summary h2 { display: inline; }
+  .sound-info { list-style: none; padding: 0; margin: 10px 0; font-size: 16px; }
+  .sound-info li { margin-bottom: 4px; }
+  .sound-help h3 { margin: 16px 0 6px; font-size: 20px; }
+
+  @media (max-width: 600px) {
+    .car { width: 80px; height: 52px; top: 24px; left: calc((100% - 80px) * var(--p)); }
+    .overlay { font-size: 64px; }
+    .overlay.small { font-size: 30px; }
+    .wins { font-size: 44px; }
+  }
+</style>
+</head>
+
+<body>
+
+<p class="small"><a href="/">← back to Caleb's website</a></p>
+
+<h1>🏁 Race Track 🏁</h1>
+
+<div class="track" id="track">
+  <div class="finish"></div>
+
+  <div class="lane">
+    <div class="lane-name" id="redLaneName">🔴 Red · tap ⬅️ ➡️</div>
+    <div class="lane-hint" id="redHint"></div>
+    <div class="car" id="redCar">
+      <svg viewBox="0 0 110 70" aria-label="Red car">
+        <path d="M8 46 L14 30 L36 26 L50 12 L78 12 L92 28 L104 32 L106 46 Z" fill="#e2231a" stroke="black" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M54 17 L76 17 L86 28 L48 28 Z" fill="#bfe6ff" stroke="black" stroke-width="2"/>
+        <rect x="96" y="34" width="8" height="5" fill="gold"/>
+        <text x="40" y="43" font-size="14" font-weight="bold" fill="white" font-family="Verdana">1</text>
+        <circle cx="30" cy="50" r="11" fill="#222" stroke="black" stroke-width="2"/>
+        <circle cx="30" cy="50" r="4" fill="#ccc"/>
+        <circle cx="84" cy="50" r="11" fill="#222" stroke="black" stroke-width="2"/>
+        <circle cx="84" cy="50" r="4" fill="#ccc"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="lane">
+    <div class="lane-name" id="blueLaneName">🔵 Blue · tap ⬆️ ⬇️</div>
+    <div class="lane-hint" id="blueHint"></div>
+    <div class="car" id="blueCar">
+      <svg viewBox="0 0 110 70" aria-label="Blue car">
+        <path d="M8 46 L14 30 L36 26 L50 12 L78 12 L92 28 L104 32 L106 46 Z" fill="#1f6fe5" stroke="black" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M54 17 L76 17 L86 28 L48 28 Z" fill="#bfe6ff" stroke="black" stroke-width="2"/>
+        <rect x="96" y="34" width="8" height="5" fill="gold"/>
+        <text x="40" y="43" font-size="14" font-weight="bold" fill="white" font-family="Verdana">2</text>
+        <circle cx="30" cy="50" r="11" fill="#222" stroke="black" stroke-width="2"/>
+        <circle cx="30" cy="50" r="4" fill="#ccc"/>
+        <circle cx="84" cy="50" r="11" fill="#222" stroke="black" stroke-width="2"/>
+        <circle cx="84" cy="50" r="4" fill="#ccc"/>
+      </svg>
+    </div>
+  </div>
+
+  <div class="overlay" id="overlay"></div>
+</div>
+
+<div class="controls">
+  <p class="message" id="message">Press START (or the Space bar) to race!</p>
+  <div class="buttons">
+    <button id="start">🚦 START</button>
+    <select id="length" aria-label="How long is the race?">
+      <option value="20">Short race</option>
+      <option value="35" selected>Medium race</option>
+      <option value="50">Long race</option>
+    </select>
+    <button id="sound">🔊 Sound on</button>
+  </div>
+  <div class="tap-test">
+    <span>No Makey Makey? Tap to test:</span>
+    <span><button class="red-btn" data-move="red-L">⬅️</button> <button class="red-btn" data-move="red-R">➡️</button></span>
+    <span><button class="blue-btn" data-move="blue-U">⬆️</button> <button class="blue-btn" data-move="blue-D">⬇️</button></span>
+  </div>
+</div>
+
+
+<div class="card">
+  <h2>🏆 Who's winning?</h2>
+  <div class="scoreboard">
+    <div class="score red">
+      <input id="redName" maxlength="12" value="Red" aria-label="Red player's name">
+      <div class="wins" id="redWins">0</div>
+      <div>wins</div>
+    </div>
+    <div class="vs">VS</div>
+    <div class="score blue">
+      <input id="blueName" maxlength="12" value="Blue" aria-label="Blue player's name">
+      <div class="wins" id="blueWins">0</div>
+      <div>wins</div>
+    </div>
+  </div>
+  <p class="leader" id="leader">No races yet!</p>
+  <div class="history" id="history" aria-label="Last 10 winners"></div>
+  <p class="best small" id="best"></p>
+  <p class="small" style="text-align:center;margin:6px 0 0">Tap a name to change it. ✏️</p>
+  <div class="buttons"><button id="resetScores">🗑️ Reset scores</button></div>
+</div>
+
+
+<div class="card">
+  <h2>🔌 How to hook it up</h2>
+  <p style="margin:0 0 6px">You need: a <b>Makey Makey</b>, the <b>USB-C adapter</b>, <b>6 alligator clips</b>,
+     <b>4 pieces of foil</b>, and <b>tape</b>.</p>
+
+  <svg class="diagram" viewBox="0 0 600 280" role="img" aria-label="Red player's foils connect to the left and right arrows. Blue player's foils connect to the up and down arrows. Both players hold a clip connected to Earth.">
+    <!-- red foils -->
+    <rect x="20" y="40" width="80" height="50" fill="#cfd6dc" stroke="#555" stroke-width="2"/>
+    <text x="60" y="71" font-size="16" text-anchor="middle">⬅️ foil</text>
+    <rect x="20" y="140" width="80" height="50" fill="#cfd6dc" stroke="#555" stroke-width="2"/>
+    <text x="60" y="171" font-size="16" text-anchor="middle">➡️ foil</text>
+    <!-- blue foils -->
+    <rect x="500" y="40" width="80" height="50" fill="#cfd6dc" stroke="#555" stroke-width="2"/>
+    <text x="540" y="71" font-size="16" text-anchor="middle">⬆️ foil</text>
+    <rect x="500" y="140" width="80" height="50" fill="#cfd6dc" stroke="#555" stroke-width="2"/>
+    <text x="540" y="171" font-size="16" text-anchor="middle">⬇️ foil</text>
+
+    <!-- Makey Makey board -->
+    <rect x="170" y="60" width="260" height="140" rx="14" fill="#e2231a" stroke="black" stroke-width="3"/>
+    <text x="300" y="82" font-size="13" text-anchor="middle" fill="white" font-weight="bold">MAKEY MAKEY</text>
+    <polygon points="245,92 232,112 258,112" fill="white" stroke="black"/>
+    <polygon points="245,168 232,148 258,148" fill="white" stroke="black"/>
+    <polygon points="200,130 220,117 220,143" fill="white" stroke="black"/>
+    <polygon points="290,130 270,117 270,143" fill="white" stroke="black"/>
+    <circle cx="350" cy="130" r="16" fill="white" stroke="black"/>
+    <text x="350" y="160" font-size="10" text-anchor="middle" fill="white">space</text>
+    <circle cx="400" cy="130" r="9" fill="white" stroke="black"/>
+    <text x="400" y="152" font-size="10" text-anchor="middle" fill="white">click</text>
+    <rect x="190" y="182" width="220" height="10" fill="#333"/>
+    <text x="300" y="214" font-size="12" text-anchor="middle">EARTH strip</text>
+
+    <!-- red wires -->
+    <path d="M205 130 C 160 120, 140 70, 100 65" fill="none" stroke="#e2231a" stroke-width="4"/>
+    <path d="M285 130 C 300 230, 140 200, 100 165" fill="none" stroke="#e2231a" stroke-width="4"/>
+    <!-- blue wires -->
+    <path d="M245 100 C 260 20, 450 30, 500 65" fill="none" stroke="#1f6fe5" stroke-width="4"/>
+    <path d="M245 160 C 300 240, 460 200, 500 165" fill="none" stroke="#1f6fe5" stroke-width="4"/>
+    <!-- earth wires to the two players -->
+    <path d="M215 188 C 190 230, 150 240, 120 250" fill="none" stroke="#111" stroke-width="4"/>
+    <path d="M385 188 C 410 230, 450 240, 480 250" fill="none" stroke="#111" stroke-width="4"/>
+    <text x="85" y="262" font-size="26" text-anchor="middle">✊</text>
+    <text x="85" y="278" font-size="12" text-anchor="middle">red holds this</text>
+    <text x="515" y="262" font-size="26" text-anchor="middle">✊</text>
+    <text x="515" y="278" font-size="12" text-anchor="middle">blue holds this</text>
+  </svg>
+
+  <ol>
+    <li>Plug the <b>Makey Makey</b> USB cable into the <b>USB-C adapter</b>, then plug the adapter into the iPad.
+        A little light on the Makey Makey turns on.</li>
+    <li><span class="tag red">RED</span> player: clip the <b>⬅️ LEFT</b> arrow to one piece of foil and the
+        <b>➡️ RIGHT</b> arrow to another piece of foil. Tape them down a hand-width apart.</li>
+    <li><span class="tag blue">BLUE</span> player: clip the <b>⬆️ UP</b> arrow and the <b>⬇️ DOWN</b> arrow
+        to two more pieces of foil. Tape them down too.</li>
+    <li><b>Both players</b>: clip a wire to <span class="tag earth">EARTH</span> (the strip along the bottom) and hold
+        the metal end in one hand. Two clips fit on the EARTH strip, one for each of you.</li>
+    <li>Tap <b>START</b>. When it says <b>GO!</b>, tap your two foils back and forth as fast as you can:
+        left, right, left, right... (or up, down, up, down...).</li>
+  </ol>
+
+  <p class="small" style="margin-top:14px">
+    <b>Why won't my car move?</b> You have to <b>switch</b> foils every time. Tapping the same foil twice in
+    a row doesn't count! Also make sure you're holding the metal end of your EARTH clip.
+    <br><b>Fun idea:</b> put the foils on the floor, take your socks off, hold the EARTH clip, and <b>run in place</b>
+    on your two foils! 🏃
+  </p>
+</div>
+
+
+<div class="card sound-help">
+  <details id="soundHelp">
+    <summary><h2>🔧 Sound not working?</h2></summary>
+
+    <p>Tap each test button. Did you hear it?</p>
+    <div class="buttons" style="justify-content:flex-start;margin-top:0">
+      <button id="testBeep">🔔 Test beep</button>
+      <button id="testMusic">🎵 Test video-style sound</button>
+    </div>
+    <ul class="sound-info" id="soundInfo"></ul>
+
+    <p><b>Heard 🎵 but not 🔔?</b> The iPad is in <b>Silent mode</b> (see #1 below).
+       Videos and Spotify still play in Silent mode, but game sounds don't.</p>
+    <p><b>Didn't hear either one?</b> Check the volume and Bluetooth (#2 and #3).</p>
+
+    <h3>Check these on the iPad</h3>
+    <ol>
+      <li><b>Silent mode</b> (the usual problem!). Swipe down from the top-right corner of the screen.
+          If the 🔔 bell is crossed out, tap it to turn sound on. (Older iPads with a little switch on the
+          side: flip it so no orange shows.)</li>
+      <li><b>Volume.</b> Press the volume-up button while you're on this page.</li>
+      <li><b>Bluetooth.</b> Make sure the sound isn't going to headphones or a speaker in another room.
+          In Control Center, tap the AirPlay icon on the music box and pick <i>iPad</i>.</li>
+      <li><b>Headphones too quiet?</b> <b>Settings → Sounds → Headphone Safety → Reduce Loud Audio</b>
+          (Screen Time may lock this one).</li>
+      <li>Still stuck? Reload this page, tap the screen once, and try the tests again.</li>
+    </ol>
+  </details>
+</div>
+
+<hr>
+<p class="small">Made by Auntie Anne and Caleb</p>
+
+
+<script>
+  // ---------- The race ----------
+  var state = "ready";          // "ready", "countdown", "racing", or "done"
+  var goal = 35;                // how many steps to the finish line
+  var raceStart = 0;
+  var soundOn = true;
+
+  var players = {
+    red:  { steps: 0, last: null, car: document.getElementById("redCar"),  hint: document.getElementById("redHint"),
+            keys: "⬅️ ➡️", emoji: "🔴" },
+    blue: { steps: 0, last: null, car: document.getElementById("blueCar"), hint: document.getElementById("blueHint"),
+            keys: "⬆️ ⬇️", emoji: "🔵" }
+  };
+
+  var overlayEl = document.getElementById("overlay");
+  var messageEl = document.getElementById("message");
+  var startBtn = document.getElementById("start");
+  var lengthSel = document.getElementById("length");
+  var soundBtn = document.getElementById("sound");
+  var trackEl = document.getElementById("track");
+
+  // ---------- Scores (saved on this iPad) ----------
+  var scores = { red: 0, blue: 0, history: [], best: null };
+  var names = { red: "Red", blue: "Blue" };
+  try {
+    var savedScores = JSON.parse(localStorage.getItem("raceScores"));
+    if (savedScores) scores = savedScores;
+    var savedNames = JSON.parse(localStorage.getItem("raceNames"));
+    if (savedNames) names = savedNames;
+    var savedLength = localStorage.getItem("raceLength");
+    if (savedLength) lengthSel.value = savedLength;
+  } catch (e) {}
+  goal = parseInt(lengthSel.value, 10) || 35;
+
+  var redNameEl = document.getElementById("redName");
+  var blueNameEl = document.getElementById("blueName");
+  redNameEl.value = names.red;
+  blueNameEl.value = names.blue;
+
+  function save() {
+    try {
+      localStorage.setItem("raceScores", JSON.stringify(scores));
+      localStorage.setItem("raceNames", JSON.stringify(names));
+      localStorage.setItem("raceLength", lengthSel.value);
+    } catch (e) {}
+  }
+
+  function nameOf(color) {
+    return names[color] || (color === "red" ? "Red" : "Blue");
+  }
+
+  function showScores() {
+    document.getElementById("redWins").textContent = scores.red;
+    document.getElementById("blueWins").textContent = scores.blue;
+    document.getElementById("redLaneName").textContent = "🔴 " + nameOf("red") + " · tap ⬅️ ➡️";
+    document.getElementById("blueLaneName").textContent = "🔵 " + nameOf("blue") + " · tap ⬆️ ⬇️";
+
+    var leader = document.getElementById("leader");
+    if (scores.red + scores.blue === 0) leader.textContent = "No races yet!";
+    else if (scores.red === scores.blue) leader.textContent = "It's a tie! 🤝";
+    else {
+      var ahead = scores.red > scores.blue ? "red" : "blue";
+      var by = Math.abs(scores.red - scores.blue);
+      leader.textContent = players[ahead].emoji + " " + nameOf(ahead) + " is winning by " + by + "!";
+    }
+
+    document.getElementById("history").textContent =
+      scores.history.length ? "Last races: " + scores.history.map(function (c) { return players[c].emoji; }).join("") : "";
+
+    document.getElementById("best").textContent = scores.best
+      ? "⏱️ Fastest race: " + scores.best.time.toFixed(1) + " seconds by " + players[scores.best.color].emoji + " " +
+        nameOf(scores.best.color) + " (" + scores.best.length + ")"
+      : "";
+  }
+  showScores();
+
+  function lengthName() {
+    return lengthSel.options[lengthSel.selectedIndex].text.replace(" race", "").toLowerCase();
+  }
+
+  function moveCars() {
+    ["red", "blue"].forEach(function (color) {
+      var p = players[color];
+      p.car.style.setProperty("--p", Math.min(1, p.steps / goal));
+    });
+  }
+
+  function startRace() {
+    if (state === "countdown" || state === "racing") return;
+    goal = parseInt(lengthSel.value, 10) || 35;
+    ["red", "blue"].forEach(function (color) {
+      var p = players[color];
+      p.steps = 0;
+      p.last = null;
+      p.hint.textContent = "";
+      p.car.classList.remove("winner");
+    });
+    moveCars();
+    state = "countdown";
+    startBtn.disabled = true;
+    lengthSel.disabled = true;
+    messageEl.textContent = "Get ready...";
+
+    var count = 3;
+    function tick() {
+      if (count > 0) {
+        showOverlay(count, false);
+        playBeep(440, 0.15);
+        count = count - 1;
+        setTimeout(tick, 800);
+      } else {
+        showOverlay("GO!", false);
+        playBeep(880, 0.35);
+        state = "racing";
+        raceStart = Date.now();
+        messageEl.textContent = "GO GO GO! 🏎️💨";
+        setTimeout(function () { if (state === "racing") showOverlay("", false); }, 700);
+      }
+    }
+    tick();
+  }
+
+  function showOverlay(text, small) {
+    overlayEl.textContent = text;
+    overlayEl.classList.toggle("small", !!small);
+    overlayEl.classList.remove("pop");
+    void overlayEl.offsetWidth;   // restart the animation
+    if (text !== "") overlayEl.classList.add("pop");
+  }
+
+  // A player tapped one of their foils
+  function step(color, which) {
+    var p = players[color];
+    if (state !== "racing") {
+      if (state !== "countdown") wiggle(p.car);
+      // after a race, keep showing who won (the loser is probably still tapping!)
+      if (state === "ready") messageEl.textContent = "Press START first! 🚦";
+      return;
+    }
+    if (p.last === which) {
+      // same foil twice in a row doesn't count!
+      p.hint.textContent = "Switch! " + p.keys;
+      wiggle(p.car);
+      return;
+    }
+    p.last = which;
+    p.hint.textContent = "";
+    p.steps = p.steps + 1;
+    moveCars();
+    playVroom(color, p.steps / goal);
+    if (p.steps >= goal) finish(color);
+  }
+
+  function wiggle(car) {
+    car.classList.remove("wiggle");
+    void car.offsetWidth;
+    car.classList.add("wiggle");
+  }
+
+  function finish(color) {
+    state = "done";
+    var time = (Date.now() - raceStart) / 1000;
+    var p = players[color];
+    p.car.classList.add("winner");
+
+    scores[color] = scores[color] + 1;
+    scores.history.push(color);
+    if (scores.history.length > 10) scores.history.shift();
+    var record = false;
+    if (!scores.best || time < scores.best.time) {
+      scores.best = { time: time, color: color, length: lengthName() };
+      record = true;
+    }
+    save();
+    showScores();
+
+    showOverlay("🏆 " + nameOf(color) + " WINS! 🏆", true);
+    messageEl.textContent = time.toFixed(1) + " seconds!" + (record ? " ⭐ NEW RECORD! ⭐" : "") +
+      " Press START to race again.";
+    startBtn.disabled = false;
+    lengthSel.disabled = false;
+    startBtn.textContent = "🚦 RACE AGAIN";
+    playFanfare();
+    var party = ["🏆", "🎉", "⭐", p.emoji, "🏁", "✨"];
+    for (var i = 0; i < 14; i++) popEmoji(party[i % party.length]);
+  }
+
+  function popEmoji(which) {
+    var box = trackEl.getBoundingClientRect();
+    var e = document.createElement("div");
+    e.className = "pop";
+    e.textContent = which;
+    e.style.left = (box.left + Math.random() * box.width) + "px";
+    e.style.top = (box.top + box.height * (0.3 + Math.random() * 0.5)) + "px";
+    e.style.setProperty("--dx", ((Math.random() - 0.5) * 240) + "px");
+    document.body.appendChild(e);
+    setTimeout(function () { e.remove(); }, 1400);
+  }
+
+  // ---------- Sound ----------
+  var audio = null;
+  function getAudio() {
+    setAudioMode("playback");
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    if (audio.state === "suspended") audio.resume();
+    return audio;
+  }
+
+  // iPads play game sounds in "ambient" mode, which goes quiet when the iPad is on
+  // Silent. "playback" mode plays sound like a video does, even on Silent.
+  function setAudioMode(mode) {
+    try {
+      if (navigator.audioSession && navigator.audioSession.type !== mode) {
+        navigator.audioSession.type = mode;
+      }
+    } catch (e) {}
+  }
+
+  function playNote(freq, length, type, volume, delay) {
+    if (!soundOn) return;
+    try {
+      var ctx = getAudio();
+      var t = ctx.currentTime + (delay || 0);
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = type || "triangle";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(volume || 0.3, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + length);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + length);
+    } catch (e) {}
+  }
+
+  function playBeep(freq, length) {
+    playNote(freq, length, "triangle", 0.3);
+  }
+
+  // a little "vroom" that gets higher as the car gets closer to the finish
+  function playVroom(color, howFar) {
+    var base = color === "red" ? 110 : 140;
+    playNote(base + howFar * 220, 0.07, color === "red" ? "sawtooth" : "square", 0.08);
+  }
+
+  function playFanfare() {
+    [523, 659, 784, 1047].forEach(function (f, i) {
+      playNote(f, i === 3 ? 0.6 : 0.18, "triangle", 0.3, i * 0.15);
+    });
+  }
+
+  // Make a .wav sound file in code (used for the test and the backup trick)
+  function makeWav(seconds, freq) {
+    var rate = 22050, n = Math.floor(rate * seconds);
+    var buf = new ArrayBuffer(44 + n * 2), v = new DataView(buf);
+    function str(at, t) { for (var i = 0; i < t.length; i++) v.setUint8(at + i, t.charCodeAt(i)); }
+    str(0, "RIFF"); v.setUint32(4, 36 + n * 2, true); str(8, "WAVE"); str(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, rate, true); v.setUint32(28, rate * 2, true); v.setUint16(32, 2, true);
+    v.setUint16(34, 16, true); str(36, "data"); v.setUint32(40, n * 2, true);
+    for (var i = 0; i < n; i++) {
+      var fade = Math.min(1, (n - i) / (rate * 0.05));
+      v.setInt16(44 + i * 2, freq ? Math.sin(2 * Math.PI * freq * i / rate) * 9000 * fade : 0, true);
+    }
+    return URL.createObjectURL(new Blob([buf], { type: "audio/wav" }));
+  }
+
+  // Backup trick for older iPads: quietly play a silent video-style sound on a loop,
+  // which makes the iPad use "playback" mode for everything on the page.
+  var silentLoop = null;
+  function keepSoundAwake() {
+    if (navigator.audioSession) return;   // newer iPads don't need it
+    if (!silentLoop) {
+      silentLoop = new Audio(makeWav(0.5, 0));
+      silentLoop.loop = true;
+      silentLoop.setAttribute("playsinline", "");
+    }
+    if (silentLoop.paused) silentLoop.play().catch(function () {});
+  }
+  ["pointerdown", "keydown"].forEach(function (type) {
+    document.addEventListener(type, function () { keepSoundAwake(); getAudio(); }, true);
+  });
+
+  // ---------- Sound helper ----------
+  var soundInfoEl = document.getElementById("soundInfo");
+
+  function showSoundInfo() {
+    var lines = [];
+    lines.push("🔊 Sound on this page: " + (soundOn ? "on" : "OFF (tap 🔇 Sound off at the top)"));
+    lines.push("⚙️ Sound engine: " + (!audio ? "not started yet (tap anywhere)" :
+      audio.state === "running" ? "running ✅" : audio.state + " (tap anywhere to wake it up)"));
+    lines.push("📱 Plays on Silent mode: " + (navigator.audioSession
+      ? (navigator.audioSession.type === "playback" ? "yes ✅" : "not yet (tap anywhere)")
+      : "using the backup trick for older iPads"));
+    soundInfoEl.innerHTML = "";
+    lines.forEach(function (t) {
+      var li = document.createElement("li");
+      li.textContent = t;
+      soundInfoEl.appendChild(li);
+    });
+  }
+
+  var musicTest = null;
+  document.getElementById("testBeep").addEventListener("click", function () {
+    this.blur();
+    var was = soundOn; soundOn = true;
+    playBeep(660, 0.4);
+    soundOn = was;
+    setTimeout(showSoundInfo, 100);
+  });
+  document.getElementById("testMusic").addEventListener("click", function () {
+    this.blur();
+    if (!musicTest) musicTest = new Audio(makeWav(0.6, 520));
+    musicTest.currentTime = 0;
+    musicTest.play().catch(function () {});
+    setTimeout(showSoundInfo, 100);
+  });
+  document.getElementById("soundHelp").addEventListener("toggle", showSoundInfo);
+  showSoundInfo();
+
+  // ---------- Makey Makey ----------
+  // The Makey Makey pretends to be a keyboard. Red uses the LEFT and RIGHT arrows,
+  // blue uses UP and DOWN. SPACE starts the race.
+  var keyMoves = {
+    "ArrowLeft": ["red", "L"],  "Left": ["red", "L"],
+    "ArrowRight": ["red", "R"], "Right": ["red", "R"],
+    "ArrowUp": ["blue", "U"],   "Up": ["blue", "U"],
+    "ArrowDown": ["blue", "D"], "Down": ["blue", "D"]
+  };
+
+  document.addEventListener("keydown", function (event) {
+    if (event.target.tagName === "INPUT") return;   // typing a name
+    if (event.key === " " || event.key === "Spacebar" || event.key === "Enter") {
+      event.preventDefault();
+      if (!event.repeat) startRace();
+      return;
+    }
+    var move = keyMoves[event.key];
+    if (!move) return;
+    event.preventDefault();          // stop the arrows from scrolling the page
+    if (event.repeat) return;        // holding a foil down only counts once
+    step(move[0], move[1]);
+  });
+
+  // On-screen buttons to test without the Makey Makey
+  document.querySelectorAll("[data-move]").forEach(function (btn) {
+    btn.addEventListener("pointerdown", function (e) {
+      e.preventDefault();
+      var parts = btn.getAttribute("data-move").split("-");
+      step(parts[0], parts[1]);
+    });
+  });
+
+  startBtn.addEventListener("click", function () {
+    startBtn.blur();   // so SPACE doesn't press this button
+    startRace();
+  });
+
+  lengthSel.addEventListener("change", function () {
+    lengthSel.blur();
+    goal = parseInt(lengthSel.value, 10) || 35;
+    save();
+  });
+
+  soundBtn.addEventListener("click", function () {
+    soundOn = !soundOn;
+    soundBtn.textContent = soundOn ? "🔊 Sound on" : "🔇 Sound off";
+    soundBtn.blur();
+    showSoundInfo();
+    if (soundOn) playBeep(600, 0.1);
+  });
+
+  [["red", redNameEl], ["blue", blueNameEl]].forEach(function (pair) {
+    var color = pair[0], input = pair[1];
+    input.addEventListener("input", function () {
+      names[color] = input.value.trim() || (color === "red" ? "Red" : "Blue");
+      save();
+      showScores();
+    });
+    input.addEventListener("keydown", function (e) {
+      if (e.key === "Enter") input.blur();   // done typing
+    });
+  });
+
+  document.getElementById("resetScores").addEventListener("click", function () {
+    this.blur();
+    if (!confirm("Reset the scores back to 0?")) return;
+    scores = { red: 0, blue: 0, history: [], best: null };
+    save();
+    showScores();
+  });
+</script>
+
+</body>
+</html>
